@@ -1,40 +1,56 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
+pragma solidity 0.8.20;
 
-import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import "@openzeppelin/contracts/token/ERC721/extensions/ERC721Enumerable.sol";
-import "@openzeppelin/contracts/token/ERC721/extensions/ERC721URIStorage.sol";
-import "@openzeppelin/contracts/token/ERC721/extensions/ERC721Pausable.sol";
-import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC721/extensions/ERC721Burnable.sol";
+import "@openzeppelin/contracts/token/ERC721/extensions/ERC721URIStorage.sol";
+import "@openzeppelin/contracts/access/AccessControl.sol";
+import "@openzeppelin/contracts/token/ERC721/extensions/ERC721Pausable.sol";
 
-contract ChickenNFT is ERC721, ERC721Enumerable, ERC721URIStorage, ERC721Pausable, Ownable, ERC721Burnable {
-    uint256 private _nextTokenId;
+contract ChickenNFT is ERC721Enumerable, ERC721URIStorage, AccessControl, ERC721Burnable, ERC721Pausable {
+    bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
+    bytes32 public constant MINTER_ROLE = keccak256("MINTER_ROLE");
 
-    constructor(address initialOwner)
-        ERC721("ChickenNFT", "CNFT")
-        Ownable(initialOwner)
-    {}
+    string private baseTokenURI;
 
-    function _baseURI() internal pure override returns (string memory) {
-        return "https://ipfs.io/ipfs/";
+    constructor(string memory name, string memory symbol,string memory _baseTokenURI)
+        ERC721(name, symbol) {
+        baseTokenURI = _baseTokenURI;
+        _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
+        _grantRole(PAUSER_ROLE, msg.sender);
+        _grantRole(MINTER_ROLE, msg.sender);
+
     }
 
-    function pause() public onlyOwner {
+    function pause() public onlyRole(PAUSER_ROLE) {
         _pause();
     }
 
-    function unpause() public onlyOwner {
+    function unpause() public onlyRole(PAUSER_ROLE) {
         _unpause();
     }
 
-    function safeMint(address to, string memory uri) public onlyOwner {
-        uint256 tokenId = _nextTokenId++;
-        _safeMint(to, tokenId);
-        _setTokenURI(tokenId, uri);
+    function mintNFT(address recipient) public onlyRole(MINTER_ROLE) returns (uint256) {
+        uint256 tokenId = totalSupply();
+        _safeMint(recipient, tokenId);
+        return tokenId;
     }
 
-    // The following functions are overrides required by Solidity.
+    function baseURI() external view returns (string memory) {
+        return _baseURI();
+    }
+
+    function setBaseURI(string memory _baseTokenURI) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        baseTokenURI = _baseTokenURI;
+    }
+
+    function setTokenURI(uint256 tokenId, string memory _tokenURI) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        _setTokenURI(tokenId, _tokenURI);
+    }
+   
+    function _baseURI() internal view virtual override returns (string memory) {
+        return baseTokenURI;
+    }
 
     function _update(address to, uint256 tokenId, address auth)
         internal
@@ -43,7 +59,7 @@ contract ChickenNFT is ERC721, ERC721Enumerable, ERC721URIStorage, ERC721Pausabl
     {
         return super._update(to, tokenId, auth);
     }
-
+   
     function _increaseBalance(address account, uint128 value)
         internal
         override(ERC721, ERC721Enumerable)
@@ -63,7 +79,7 @@ contract ChickenNFT is ERC721, ERC721Enumerable, ERC721URIStorage, ERC721Pausabl
     function supportsInterface(bytes4 interfaceId)
         public
         view
-        override(ERC721, ERC721Enumerable, ERC721URIStorage)
+        override(ERC721, ERC721Enumerable, ERC721URIStorage, AccessControl)
         returns (bool)
     {
         return super.supportsInterface(interfaceId);
